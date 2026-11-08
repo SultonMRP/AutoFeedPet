@@ -1,0 +1,13 @@
+## Interface: 16001
+## Title: |cffaad372Auto Feed Pet|r
+## Notes: Small hunger popup for hunter pets. Click it or use the Feed Pet keybind. No auto-cast.
+## Notes-esES: Aviso pequeño de hambre para mascotas de cazador. Clic o tecla Feed Pet. Sin auto-lanzamiento.
+## Notes-esMX: Aviso pequeño de hambre para mascotas de cazador. Clic o tecla Feed Pet. Sin auto-lanzamiento.
+## Author: AutoFeedPet
+## Version: 1.0.0
+## IconTexture: Interface\Icons\Ability_Hunter_BeastTaming
+## SavedVariablesPerCharacter: AutoFeedPetDB
+## X-Category: Hunter
+## X-Compatible-With: forever
+
+AutoFeedPet.lua

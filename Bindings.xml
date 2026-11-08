@@ -1,0 +1,3 @@
+<Bindings>
+	<Binding name="CLICK AutoFeedPetButton:LeftButton" Category="BINDING_HEADER_AUTOFEEDPET" />
+</Bindings>
