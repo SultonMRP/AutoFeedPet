@@ -194,6 +194,8 @@ end
 local FOOD_BLACKLIST = {
 	[6522] = true, -- Deviate Fish
 	[6657] = true, -- Savory Deviate Delight (ninja / pirate)
+	[43571] = true, -- Magic Eater
+	[251525] = true, -- Savory Whimsyfin Delight
 }
 
 -- Mage bread (pets that eat bread). Water IDs are omitted; CanPetEatItem also filters diet.
