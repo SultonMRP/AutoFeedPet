@@ -190,6 +190,12 @@ local function NeedsFood()
 	return h == 2 and db and db.feedOnYellow
 end
 
+-- Fun/transform foods pets can eat. Do not pick these for Feed Pet.
+local FOOD_BLACKLIST = {
+	[6522] = true, -- Deviate Fish
+	[6657] = true, -- Savory Deviate Delight (ninja / pirate)
+}
+
 -- Mage bread (pets that eat bread). Water IDs are omitted; CanPetEatItem also filters diet.
 local MAGE_FOOD = {
 	[5349] = true, -- Conjured Muffin
@@ -249,7 +255,7 @@ local function FindFood()
 		local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
 		for slot = 1, (ok and slots or 0) do
 			local itemID = C_Container.GetContainerItemID(bag, slot)
-			if itemID then
+			if itemID and not FOOD_BLACKLIST[itemID] then
 				local okEat, canEat = pcall(C_PetInfo.CanPetEatItem, itemID)
 				if okEat and canEat then
 					local info = C_Container.GetContainerItemInfo(bag, slot) or {}
