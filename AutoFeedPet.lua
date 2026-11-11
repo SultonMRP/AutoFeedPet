@@ -578,8 +578,28 @@ local function EnsureFrames()
 	BuildFeed()
 end
 
+local function InCombat()
+	return InCombatLockdown() or UnitAffectingCombat("player")
+end
+
+local function HidePopup()
+	if not panel then
+		return
+	end
+	if not InCombatLockdown() then
+		for i = 1, MAX_FOODS do
+			SetRow(feedBtns[i], nil)
+		end
+	end
+	panel:Hide()
+	panel:SetAlpha(1)
+end
+
 local function ShouldShow()
 	if not db or not db.enabled then
+		return false
+	end
+	if InCombat() then
 		return false
 	end
 	if PlayerIsAFK() then
@@ -597,14 +617,14 @@ local function Refresh()
 		return
 	end
 
+	if InCombat() then
+		HidePopup()
+		return
+	end
+
 	local show = ShouldShow()
 	if not show then
-		if not InCombatLockdown() then
-			for i = 1, MAX_FOODS do
-				SetRow(feedBtns[i], nil)
-			end
-			panel:Hide()
-		end
+		HidePopup()
 		return
 	end
 
@@ -621,12 +641,9 @@ local function Refresh()
 	local foods = FindFoods()
 	food = foods[1]
 	local eating = PetIsEating()
-	local combat = InCombatLockdown() or UnitAffectingCombat("player")
-	local n = (not eating and not combat and #foods > 0) and #foods or 0
+	local n = (not eating and #foods > 0) and #foods or 0
 	if eating then
 		panel.status:SetText(loc.eating)
-	elseif combat then
-		panel.status:SetText(loc.combat)
 	elseif n == 0 then
 		panel.status:SetText("|cffff6060" .. loc.noFood .. "|r")
 	else
@@ -720,6 +737,14 @@ f:SetScript("OnEvent", function(_, event, arg1)
 			db.used = {}
 		end
 		C_Timer.NewTicker(15, Refresh)
+		return
+	end
+	if event == "PLAYER_REGEN_DISABLED" then
+		HidePopup()
+		return
+	end
+	if event == "PLAYER_REGEN_ENABLED" then
+		Schedule(0.15)
 		return
 	end
 	if event == "UNIT_PET" and arg1 ~= "player" then

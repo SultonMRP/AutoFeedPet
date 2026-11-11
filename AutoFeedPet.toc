@@ -4,7 +4,7 @@
 ## Notes-esES: Aviso pequeño de hambre para mascotas de cazador. Clic o tecla Feed Pet. Sin auto-lanzamiento.
 ## Notes-esMX: Aviso pequeño de hambre para mascotas de cazador. Clic o tecla Feed Pet. Sin auto-lanzamiento.
 ## Author: AutoFeedPet
-## Version: 1.1.0
+## Version: 1.1.1
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastTaming
 ## SavedVariables: AutoFeedPetDB
 ## X-Category: Hunter
