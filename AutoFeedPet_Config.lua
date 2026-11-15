@@ -29,8 +29,9 @@ local function Skin(frame)
 end
 
 local function GetInfo(itemID)
-	local getInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-	return getInfo(itemID)
+	if C_Item and C_Item.GetItemInfo then
+		return C_Item.GetItemInfo(itemID)
+	end
 end
 
 local function ItemIsUnknown(itemID)
@@ -53,7 +54,7 @@ local function QueryItemFromServer(itemID)
 	if not queryTip then
 		queryTip = CreateFrame("GameTooltip", "AutoFeedPetQueryTip", UIParent, "GameTooltipTemplate")
 		queryTip:SetOwner(UIParent, "ANCHOR_NONE")
-		queryTip:SetScript("OnTooltipSetItem", function()
+		queryTip:HookScript("OnTooltipSetItem", function()
 			if RefreshBlacklistLists then
 				RefreshBlacklistLists()
 			end
@@ -245,7 +246,7 @@ local function BagFoods()
 				local canEat
 				if C_PetInfo and C_PetInfo.CanPetEatItem then
 					local okEat, eat = pcall(C_PetInfo.CanPetEatItem, itemID)
-					canEat = okEat and eat
+					canEat = okEat and AFP.PublicBool and AFP.PublicBool(eat)
 				end
 				if canEat then
 					seen[itemID] = true
@@ -380,6 +381,7 @@ local function BuildBlacklist()
 	local ev = CreateFrame("Frame", nil, blacklistFrame)
 	ev:RegisterEvent("BAG_UPDATE_DELAYED")
 	ev:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+	pcall(ev.RegisterEvent, ev, "ITEM_DATA_LOAD_RESULT")
 	ev:SetScript("OnEvent", function()
 		if blacklistFrame:IsShown() then
 			RefreshBlacklistLists()

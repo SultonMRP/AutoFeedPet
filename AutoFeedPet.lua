@@ -131,12 +131,27 @@ local function SpellName(spellID)
 			return name
 		end
 	end
-	if GetSpellInfo then
-		local ok, name = pcall(GetSpellInfo, spellID)
-		if ok then
-			return name
-		end
+end
+
+local function Secret(value)
+	return issecretvalue ~= nil and issecretvalue(value)
+end
+
+-- Forever secret booleans cannot be used in `if value then` while tainted.
+local function PublicBool(value)
+	if value == nil or Secret(value) then
+		return false
 	end
+	return value == true
+end
+AFP.PublicBool = PublicBool
+
+local function UnitFlag(fn, unit)
+	if not fn then
+		return false
+	end
+	local ok, value = pcall(fn, unit)
+	return ok and PublicBool(value)
 end
 
 local function IsHunter()
@@ -145,13 +160,13 @@ local function IsHunter()
 end
 
 local function HasHunterPet()
-	if not UnitExists("pet") or UnitIsDead("pet") or UnitIsDeadOrGhost("player") then
+	if not UnitFlag(UnitExists, "pet") or UnitFlag(UnitIsDead, "pet") or UnitFlag(UnitIsDeadOrGhost, "player") then
 		return false
 	end
 	if HasPetUI then
 		local ok, hasUI, isHunterPet = pcall(HasPetUI)
-		if ok and hasUI ~= nil then
-			return isHunterPet and true or false
+		if ok and not Secret(hasUI) and hasUI ~= nil then
+			return PublicBool(isHunterPet)
 		end
 	end
 	return IsHunter()
@@ -164,29 +179,23 @@ local function Happiness()
 			return h
 		end
 	end
-	if GetPetHappiness then
-		local h = GetPetHappiness()
-		if type(h) == "number" then
-			return h
-		end
-	end
 end
 
 local function KnowsFeedPet()
 	if C_SpellBook and C_SpellBook.IsSpellKnown then
 		local ok, known = pcall(C_SpellBook.IsSpellKnown, FEED_PET)
 		if ok then
-			return known and true or false
+			return PublicBool(known)
 		end
 	end
 	if IsPlayerSpell then
-		return IsPlayerSpell(FEED_PET) and true or false
+		return PublicBool(IsPlayerSpell(FEED_PET))
 	end
 	return true
 end
 
 local function UnitHasSpellAura(unit, spellID)
-	if not UnitExists(unit) then
+	if not UnitFlag(UnitExists, unit) then
 		return false
 	end
 	if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
@@ -223,13 +232,7 @@ local function PetIsEating()
 end
 
 local function PlayerIsAFK()
-	if UnitIsAFK then
-		local ok, afk = pcall(UnitIsAFK, "player")
-		if ok and afk then
-			return true
-		end
-	end
-	return false
+	return UnitFlag(UnitIsAFK, "player")
 end
 
 local function NeedsFood()
@@ -317,8 +320,11 @@ local function FindFoods()
 	if not (C_PetInfo and C_PetInfo.CanPetEatItem and C_Container and C_Container.GetContainerNumSlots) then
 		return {}
 	end
-	local petLevel = UnitLevel("pet") or 1
-	local getInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+	local petLevel = UnitLevel("pet")
+	if type(petLevel) ~= "number" or Secret(petLevel) then
+		petLevel = 1
+	end
+	local getInfo = C_Item and C_Item.GetItemInfo
 	local byID = {}
 	for bag = 0, (NUM_BAG_SLOTS or 4) do
 		local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
@@ -326,10 +332,13 @@ local function FindFoods()
 			local itemID = C_Container.GetContainerItemID(bag, slot)
 			if itemID and not IsBlacklisted(itemID) then
 				local okEat, canEat = pcall(C_PetInfo.CanPetEatItem, itemID)
-				if okEat and canEat then
+				if okEat and PublicBool(canEat) then
 					local info = C_Container.GetContainerItemInfo(bag, slot) or {}
 					local count = info.stackCount or 1
-					local name, _, _, itemLevel = getInfo(itemID)
+					local name, _, _, itemLevel
+					if getInfo then
+						name, _, _, itemLevel = getInfo(itemID)
+					end
 					local mage = IsMageFood(itemID, info)
 					local score = math.abs((itemLevel or petLevel) - petLevel)
 					local cur = byID[itemID]
@@ -405,7 +414,7 @@ local function PlayAlertSound()
 		return
 	end
 	if PlaySoundFile then
-		pcall(PlaySoundFile, ALERT_SOUND, "Master")
+		pcall(PlaySoundFile, ALERT_SOUND)
 	end
 end
 
@@ -455,7 +464,12 @@ local function Build()
 		return
 	end
 
-	panel = CreateFrame("Frame", "AutoFeedPetFrame", UIParent, "BackdropTemplate")
+	local ok, frame = pcall(CreateFrame, "Frame", "AutoFeedPetFrame", UIParent, "SecureHandlerStateTemplate, BackdropTemplate")
+	if ok and frame then
+		panel = frame
+	else
+		panel = CreateFrame("Frame", "AutoFeedPetFrame", UIParent, "BackdropTemplate")
+	end
 	panel:SetSize(260, 58)
 	panel:SetFrameStrata("HIGH")
 	panel:SetClampedToScreen(true)
@@ -543,6 +557,17 @@ local function Build()
 		feedBtns[i] = row
 	end
 
+	if panel.SetAttribute then
+		panel:SetAttribute("_onstate-afpcombat", [[
+			if newstate == "1" then
+				self:Hide()
+			end
+		]])
+	end
+	if RegisterStateDriver then
+		pcall(RegisterStateDriver, panel, "afpcombat", "[combat]1;0")
+	end
+
 	ApplyPosition()
 	panel:Hide()
 end
@@ -579,20 +604,25 @@ local function EnsureFrames()
 end
 
 local function InCombat()
-	return InCombatLockdown() or UnitAffectingCombat("player")
+	if InCombatLockdown() then
+		return true
+	end
+	return UnitFlag(UnitAffectingCombat, "player")
 end
 
 local function HidePopup()
 	if not panel then
 		return
 	end
-	if not InCombatLockdown() then
-		for i = 1, MAX_FOODS do
-			SetRow(feedBtns[i], nil)
-		end
+	-- After Forever's update this frame is protected (secure Feed buttons).
+	-- Hide/Show/SetAttribute from Lua during lockdown taints ADDON_ACTION_BLOCKED.
+	if InCombatLockdown() then
+		return
+	end
+	for i = 1, MAX_FOODS do
+		SetRow(feedBtns[i], nil)
 	end
 	panel:Hide()
-	panel:SetAlpha(1)
 end
 
 local function ShouldShow()
@@ -617,8 +647,7 @@ local function Refresh()
 		return
 	end
 
-	if InCombat() then
-		HidePopup()
+	if InCombatLockdown() then
 		return
 	end
 
@@ -631,7 +660,11 @@ local function Refresh()
 	local h = Happiness() or 2
 	local face = FACE[h] or FACE[2]
 	local r, g, b = face[2], face[3], face[4]
-	panel.pet:SetText(UnitName("pet") or "?")
+	local petName = UnitName("pet")
+	if type(petName) ~= "string" or Secret(petName) or petName == "" then
+		petName = "?"
+	end
+	panel.pet:SetText(petName)
 	panel.mood:SetText(string.format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, face[1]))
 	panel.face:SetTexCoord(face[5], face[6], face[7], face[8])
 	if panel.SetBackdropBorderColor then
@@ -740,7 +773,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
 		return
 	end
 	if event == "PLAYER_REGEN_DISABLED" then
-		HidePopup()
+		-- Frame is protected; Lua Hide() taints. Secure state driver hides it.
 		return
 	end
 	if event == "PLAYER_REGEN_ENABLED" then
